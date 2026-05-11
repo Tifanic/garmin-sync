@@ -168,20 +168,37 @@ def main():
     cn_headers = login_cn_with_garth(cn_email, cn_password)
     logger.info("CN login OK")
 
-    # Get all activity IDs from COM
+    # Only sync activities from 2026 onwards
+    from datetime import datetime, timezone
+    SYNC_START_DATE = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    # Get all activity IDs from COM (stop when activities are older than 2026)
     all_ids = []
     start = 0
     while True:
         activities = source.get_activities(start, 100)
         if not activities:
             break
-        ids = [str(a["activityId"]) for a in activities]
-        all_ids.extend(ids)
+        for a in activities:
+            start_time = a.get("startTimeGMT", "")
+            if start_time:
+                try:
+                    t = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                    if t < SYNC_START_DATE:
+                        logger.info(f"Reached activity before 2026, stopping pagination")
+                        activities = None
+                        break
+                except ValueError:
+                    pass
+            if activities is not None:
+                all_ids.append(str(a["activityId"]))
+        if activities is None:
+            break
         if len(activities) < 100:
             break
         start += 100
         time.sleep(0.5)
-    logger.info(f"Found {len(all_ids)} activities on COM")
+    logger.info(f"Found {len(all_ids)} activities from 2026 on COM")
 
     # Load synced state
     state = load_sync_state()
