@@ -1,0 +1,41 @@
+name: Garmin COM to CN Sync
+
+on:
+  schedule:
+    # Every 2 hours (UTC)
+    - cron: '0 */2 * * *'
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: 'requirements.txt'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore sync state
+        uses: actions/cache@v4
+        with:
+          path: sync_state.json
+          key: garmin-sync-state
+
+      - name: Run sync
+        run: python garmin_sync_ci.py "${{ secrets.GARMIN_COM_EMAIL }}" "${{ secrets.GARMIN_COM_PASSWORD }}" "${{ secrets.GARMIN_CN_EMAIL }}" "${{ secrets.GARMIN_CN_PASSWORD }}"
+
+      - name: Upload sync state
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-state
+          path: sync_state.json
+          retention-days: 90

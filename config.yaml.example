@@ -1,0 +1,14 @@
+# Garmin Data Sync Configuration
+
+# Sync direction: COM_TO_CN (international -> china) or CN_TO_COM
+sync_direction: COM_TO_CN
+
+# Garmin International Account
+garmin_com:
+  email: "your_com_email@example.com"
+  password: "your_com_password"
+
+# Garmin China Account
+garmin_cn:
+  email: "your_cn_email@example.com"
+  password: "your_cn_password"
