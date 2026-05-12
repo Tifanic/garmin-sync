@@ -168,11 +168,12 @@ def main():
     cn_headers = login_cn_with_garth(cn_email, cn_password)
     logger.info("CN login OK")
 
-    # Only sync activities from 2026 onwards
-    from datetime import datetime, timezone
-    SYNC_START_DATE = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    # Only sync activities from today (UTC)
+    from datetime import datetime, timezone, timedelta
 
-    # Get all activity IDs from COM (stop when activities are older than 2026)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Get today's activity IDs from COM (stop when activities are before today)
     all_ids = []
     start = 0
     while True:
@@ -186,8 +187,8 @@ def main():
                     t = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
                     if t.tzinfo is None:
                         t = t.replace(tzinfo=timezone.utc)
-                    if t < SYNC_START_DATE:
-                        logger.info(f"Reached activity before 2026, stopping pagination")
+                    if t < today_start:
+                        logger.info(f"Reached activity before today, stopping pagination")
                         activities = None
                         break
                 except ValueError:
@@ -200,7 +201,7 @@ def main():
             break
         start += 100
         time.sleep(0.5)
-    logger.info(f"Found {len(all_ids)} activities from 2026 on COM")
+    logger.info(f"Found {len(all_ids)} activities from today on COM")
 
     # Load synced state
     state = load_sync_state()
@@ -252,6 +253,14 @@ def main():
             logger.info(f"Uploaded: {result.get('detailedImportResult', result)}")
             synced_ids.add(aid)
             success += 1
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 409:
+                logger.info(f"Activity {aid} already exists on CN, skipping")
+                synced_ids.add(aid)
+                success += 1
+            else:
+                logger.error(f"Upload failed: {e}")
+                failed += 1
         except Exception as e:
             logger.error(f"Upload failed: {e}")
             failed += 1
