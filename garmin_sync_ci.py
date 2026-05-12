@@ -184,6 +184,8 @@ def main():
             if start_time:
                 try:
                     t = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                    if t.tzinfo is None:
+                        t = t.replace(tzinfo=timezone.utc)
                     if t < SYNC_START_DATE:
                         logger.info(f"Reached activity before 2026, stopping pagination")
                         activities = None
