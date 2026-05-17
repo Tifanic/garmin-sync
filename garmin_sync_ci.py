@@ -253,6 +253,7 @@ def main():
         logger.info(f"[{i+1}/{len(new_ids)}] Syncing activity {aid}...")
 
         file_data = None
+        original_data = None
         filename = None
 
         # Try FIT first
@@ -260,6 +261,7 @@ def main():
             raw = source.download_activity(aid, dl_fmt=Garmin.ActivityDownloadFormat.ORIGINAL)
             fit_data = extract_fit_from_zip(raw)
             if fit_data:
+                original_data = fit_data
                 file_data = try_process_fit(fit_data)
                 filename = f"{aid}.fit"
         except Exception as e:
@@ -269,6 +271,7 @@ def main():
         if file_data is None:
             try:
                 file_data = source.download_activity(aid, dl_fmt=Garmin.ActivityDownloadFormat.GPX)
+                original_data = None  # GPX has no processing
                 filename = f"{aid}.gpx"
             except Exception as e:
                 logger.error(f"GPX download also failed: {e}")
@@ -286,6 +289,25 @@ def main():
                 logger.info(f"Activity {aid} already exists on CN, skipping")
                 synced_ids.add(aid)
                 success += 1
+            elif e.response.status_code == 406 and original_data and file_data != original_data:
+                # Processed FIT rejected, retry with original
+                logger.warning(f"Processed FIT rejected (406), retrying with original file")
+                try:
+                    result = upload_to_cn(cn_headers, original_data, filename)
+                    logger.info(f"Original file uploaded: {result.get('detailedImportResult', result)}")
+                    synced_ids.add(aid)
+                    success += 1
+                except httpx.HTTPStatusError as e2:
+                    if e2.response.status_code == 409:
+                        logger.info(f"Activity {aid} already exists on CN")
+                        synced_ids.add(aid)
+                        success += 1
+                    else:
+                        logger.error(f"Upload failed even with original: {e2}")
+                        failed += 1
+                except Exception as e2:
+                    logger.error(f"Upload failed even with original: {e2}")
+                    failed += 1
             else:
                 logger.error(f"Upload failed: {e}")
                 failed += 1
