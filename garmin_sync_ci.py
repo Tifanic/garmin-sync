@@ -68,6 +68,33 @@ def upload_to_cn(headers: dict, file_data: bytes, filename: str) -> dict:
     return resp.json()
 
 
+def _patch_fit_tool():
+    """Monkey-patch fit-tool to handle non-UTF-8 string fields."""
+    try:
+        from fit_tool.field import Field
+        original_read = Field.read_strings_from_bytes
+
+        def safe_read_strings(self, bytes_buffer: bytes):
+            try:
+                return original_read(self, bytes_buffer)
+            except UnicodeDecodeError:
+                # Split on null bytes and decode each segment individually
+                segments = bytes_buffer.split(b'\x00')
+                self.encoded_values = []
+                for seg in segments:
+                    if seg:
+                        try:
+                            self.encoded_values.append(seg.decode('utf-8'))
+                        except UnicodeDecodeError:
+                            self.encoded_values.append(seg.decode('latin-1'))
+
+        Field.read_strings_from_bytes = safe_read_strings
+    except Exception:
+        pass
+
+_patch_fit_tool()
+
+
 def try_process_fit(file_data: bytes) -> bytes:
     """Inject Garmin device info into FIT file."""
     try:
@@ -168,10 +195,11 @@ def main():
     cn_headers = login_cn_with_garth(cn_email, cn_password)
     logger.info("CN login OK")
 
-    # Only sync activities from today (UTC)
+    # Only sync activities from today (China timezone UTC+8)
     from datetime import datetime, timezone, timedelta
 
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    cn_tz = timezone(timedelta(hours=8))
+    today_start = datetime.now(cn_tz).replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Get today's activity IDs from COM (stop when activities are before today)
     all_ids = []

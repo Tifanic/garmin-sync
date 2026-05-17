@@ -25,19 +25,16 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Restore sync state
-        uses: actions/download-artifact@v4
-        continue-on-error: true
+        uses: actions/cache@v4
         with:
-          name: sync-state
-          path: .
+          path: sync_state.json
+          key: garmin-sync-state
 
       - name: Run sync
         run: python garmin_sync_ci.py "${{ secrets.GARMIN_COM_EMAIL }}" "${{ secrets.GARMIN_COM_PASSWORD }}" "${{ secrets.GARMIN_CN_EMAIL }}" "${{ secrets.GARMIN_CN_PASSWORD }}"
 
-      - name: Upload sync state
-        uses: actions/upload-artifact@v4
+      - name: Save sync state
+        uses: actions/cache/save@v4
         with:
-          name: sync-state
           path: sync_state.json
-          retention-days: 90
-          overwrite: true
+          key: garmin-sync-state
