@@ -195,13 +195,15 @@ def main():
     cn_headers = login_cn_with_garth(cn_email, cn_password)
     logger.info("CN login OK")
 
-    # Only sync activities from today (China timezone UTC+8)
+    # Sync activities from the last 48 hours (China timezone UTC+8)
+    # Using 48h window prevents missing late-night activities when CI
+    # runs after midnight Beijing time.
     from datetime import datetime, timezone, timedelta
 
     cn_tz = timezone(timedelta(hours=8))
-    today_start = datetime.now(cn_tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    cutoff = datetime.now(cn_tz) - timedelta(hours=48)
 
-    # Get today's activity IDs from COM (stop when activities are before today)
+    # Get recent activity IDs from COM (stop when activities are before cutoff)
     all_ids = []
     start = 0
     while True:
@@ -215,8 +217,8 @@ def main():
                     t = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
                     if t.tzinfo is None:
                         t = t.replace(tzinfo=timezone.utc)
-                    if t < today_start:
-                        logger.info(f"Reached activity before today, stopping pagination")
+                    if t < cutoff:
+                        logger.info(f"Reached activity before 48h window, stopping pagination")
                         activities = None
                         break
                 except ValueError:
@@ -229,7 +231,7 @@ def main():
             break
         start += 100
         time.sleep(0.5)
-    logger.info(f"Found {len(all_ids)} activities from today on COM")
+    logger.info(f"Found {len(all_ids)} activities from last 48h on COM")
 
     # Load synced state
     state = load_sync_state()
